@@ -15,5 +15,7 @@ I created this README using the next steps:
 - Go to github.com
 - edit file
 - commit to changes (bottom of page, write comment on changes added)
-- 
+- go back to github app on local device
+- sync
 
+AND BOOM, THERE WAS THIS DOCUMENT
