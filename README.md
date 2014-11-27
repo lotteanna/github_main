@@ -10,6 +10,10 @@ I created this README using the next steps:
 - Create a text file in this desired directory
 - Save it
 - Go to github application
-- Commit to changes in file
+- Commit to changes in file (write comments on changes added)
+- Sync it (top right corner)
+- Go to github.com
+- edit file
+- commit to changes (bottom of page, write comment on changes added)
 - 
 
