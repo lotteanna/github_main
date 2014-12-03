@@ -607,6 +607,7 @@ head(d) #R called my column V1
 hist(d$V1)
 ```
 
+
 F) get summary statistics and filter SNP table based on minor allele frequency,
 heterozygosity and missing data using snp_coverage.pl
 ```
@@ -741,7 +742,11 @@ needs a vcf as input
 Task 4: Prepare the SNP-tables for the different programs
 
 **STRUCTURE**
-Can't deal with linked loci, so need to select at random one SNP per contig
+
+A)
+
+STRUCTURE can't deal with linked loci, so need to select at random one SNP per contig
+
 ```
 perl /nfs/home/hpcsci/lotteanv/scripts/random_one_per_locus_combined.pl snptableUG.tab.table.contig
 ```
@@ -755,6 +760,159 @@ awk 'NR!=1{print $1}' snptableUG.tab.table.contig | sort | uniq -c | wc -l
 ```
 awk 'NR!=1{print $1}' snptableUG.tab.table.contig.random | wc -l
 ```
+
+B)
+Convert the SNPtable to a STRUCTURE readable format
+
+ NOTE: the order of the digital numbers is mixed up (eg AC can now be read in by Structure as CA. This means linkage mapping is impossible with this data (see Structure documentation). This is caused by the coding used initially, which is by vcf2vertical_dep_GATK_UG.pl
+
+First, make a population document (popind) for the conversion script, which is a tab separated file. The following seems to work (don't enter the headers):
+pop        sampleID
+010908-1	2-010908-1-17
+010908-1	2-010908-1-9
+010908-1	1-010908-1-27
+010908-1	1-010908-1-12
+010908-1	6-010908-1-7
+010908-1	6-010908-1-22
+160808-1	2-160808-1-11
+160808-1	1-160808-1-12
+etc
+
+Run the conversion script:
+```
+ #########################################################################
+ # SNPtable2structure_combined_lotte                                     #
+ #                                                                       #
+ # when including location information run as:                           #
+ # perl bin/SNPtable2structure.pl data/rand.snptable \                   #
+ # results/rand.structure data/names2pop                                 #
+ # when not including location information run as:                       #
+ # perl bin/SNPtable2structure.pl data/rand.snptable \                   #
+ # results/rand.structure                                                #
+ #                                                                       #
+ # This script converts custom SNP tables to STRUCTURE format            #
+ # Current version allows for 2 SNPlocation information columns          #
+ # last version: transcript contig, genomic contig and genomic position  #
+ # current version: genomic contig and genomic position                  #
+ # editted by Lotte van Boheemen                                         #
+ # last edit 3-12-14                                                     #
+ #########################################################################
+ 
+ #!/usr/bin/perl
+ 
+ use diagnostics;
+ use warnings;
+ use strict;
+ 
+ my $in = $ARGV[0];
+ my $pop = $ARGV[2]; #tab sep pop \t ind
+ my $out = $ARGV[1];
+ my %pop;
+ my %snp_to_dig;
+ $snp_to_dig{"A"}='1	1';
+ $snp_to_dig{"T"}='2	2';
+ $snp_to_dig{"C"}='3	3';
+ $snp_to_dig{"G"}='4	4';
+ $snp_to_dig{"N"}='-9	-9';
+ $snp_to_dig{"K"}='2	4';
+ $snp_to_dig{"R"}='1	4';
+ $snp_to_dig{"W"}='1	2';
+ $snp_to_dig{"M"}='1	3';
+ $snp_to_dig{"S"}='3	4';
+ $snp_to_dig{"Y"}='2	3';
+ $snp_to_dig{"-"}='-9	-9';
+ 
+ my $c=1;
+ my %h;
+ my %samples;
+ my @samples;
+ my @loc;
+ my %label;
+ my $cn=1;
+ open POP, $pop; #this will open the population file (ARGV[2])
+	while (<POP>){
+ chomp;
+ my @a = split;	#this will split each line of the pop file and turns it into an array @a, $a[0] is first column in pop file, $a[1] is 2nd
+ $pop{$cn}=$a[1]; #calls key "1" in %pop the same as 2nd column of pop file
+ $label{$cn}=$a[0]; #calls key "1" in %label the same as 1st column of pop file
+ $cn++; #adds 1 to cn, so calls key 1,2,3 etc
+	}
+ 
+ close POP;
+ 
+ foreach my $i (keys %pop){
+ print "$i $pop{$i} \n";
+ }
+ 
+ open IN, $in;
+ 
+ #foreach (keys %snp_to_dig){
+ #	print "keys $_ $snp_to_dig{$_}\n";
+ #}
+ while (<IN>){
+ chomp;
+ my @a = split;
+ if(/^#/){ #skip any header, in this case CHROM POS <sampleIDs>
+ next;
+ }
+ my $loc=shift (@a);
+ #delete CHROM    POS
+ #		shift(@a);
+ #shift(@a);
+ #shift(@a);
+ my @tmp=();
+ my $loc2=shift(@a);
+ push(@tmp, $loc, $loc2); #name withgenomic contig and genomic position
+ my $tmp=join '__', @tmp;
+ push(@loc, $tmp);
+ my $ind=1;
+ foreach my $i (@a){
+ print "$snp_to_dig{$i}\n";
+ push(@{$samples{$ind}}, $snp_to_dig{$i});
+ $ind=$ind+1;
+ }
+ 
+ }
+ close IN;
+ open OUT, ">$out";
+ 
+ print  OUT "label\tpopulation\t";
+ 
+ foreach (@loc){
+	print OUT "$_\t";
+ }
+ print OUT "\n";
+ 
+ foreach my $s (sort keys %samples){
+	if ($pop){
+ if ($pop{$s}){
+ print OUT "$label{$s}\t$pop{$s}\t";
+ foreach (@{$samples{$s}}){
+ print "pop $s\n";
+ print OUT  "$_\t";
+ }
+ print OUT "\n";
+ }
+	}else{
+ print OUT "$label{$s}\t";
+ foreach my $t (@{$samples{$s}}){
+ print OUT "$t\t";
+ }
+ print OUT "\n";
+	}
+ }
+
+```
+
+In command line:
+``` perl ~/scripts/SNPtable2structure_combined_lotte.pl snptableUG.tab.192.table.contig.random rand.structure popind```
+
+It prints out the rand.structure table with per line the following:
+popID \t sampleID \t \t Chrom_pos1 \t Chrom_pos2 etc. Not quite sure what happens to the double alleles
+
+I can't yet get it to work without providing pop information, but I reckon that IF you want to run this into STRUCTURE without any prior population knowledge, just say all pops are 1.
+Or something similar. 
+
 
 10
 
